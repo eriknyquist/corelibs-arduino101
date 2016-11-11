@@ -118,5 +118,6 @@ extern uint32_t pwmPeriod[4];
 #include "wiring_shift.h"
 #include "WInterrupts.h"
 #include "dccm/dccm_alloc.h"
+#include "wsrc/wsrc.h"
 
 #endif // Arduino_h

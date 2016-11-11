@@ -36,6 +36,8 @@ int main( void )
 
 	// delay(1);
 
+    wsrc_table_init();
+
 #if defined(USBCON)
 	USBDevice.attach();
 #endif

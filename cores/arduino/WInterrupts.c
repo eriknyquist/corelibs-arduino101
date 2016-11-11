@@ -21,6 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include "wiring_digital.h"
 #include "gpio.h"
 #include "interrupt.h"
+#include "wsrc/wsrc.h"
 
 /* Saves the interrupt state from STATUS32 register before disabling the
  * interrupts */
@@ -28,6 +29,31 @@ static uint32_t irq_flags;
 /* Works kinda like a semaphore: make sure one has called noInterrupts() before
  * interrupts() */
 static uint32_t noInterrupts_executed;
+
+/* attachInterruptWakeup: If 'pin' is a valid pin number representing one of
+ * the AON GPIOs in variant.cpp (26, 27 or 28) , then we'll use that GPIO as a
+ * wakeup source and 'mode' is expected to be a valid GPIO interrupt mode e.g.
+ * RISING, FALLING, etc.
+ *
+ * Otherwise, 'pin' represents one of the WAKEUP sources defined in wsrc.h,
+ * and 'mode' is unused. */
+void attachInterruptWakeup (uint32_t pin, void (*callback)(void), uint32_t mode)
+{
+    if (pin >= AON_GPIO_START && pin <= AON_GPIO_END) {
+        wsrc_register_gpio(pin, callback, mode);
+    } else {
+        wsrc_register_id(pin, callback);
+    }
+}
+
+void detachInterruptWakeup (uint32_t pin)
+{
+    if (pin >= AON_GPIO_START && pin <= AON_GPIO_END) {
+        wsrc_unregister_gpio(pin);
+    } else {
+        wsrc_unregister_id(pin);
+    }
+}
 
 void attachInterrupt(uint32_t pin, void(*callback)(void), uint32_t mode)
 {

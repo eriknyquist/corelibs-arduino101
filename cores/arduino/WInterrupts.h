@@ -25,6 +25,10 @@
 extern "C" {
 #endif
 
+void attachInterruptWakeup(uint32_t pin, void (*callback)(void), uint32_t mode);
+
+void detachInterruptWakeup(uint32_t pin);
+
 void attachInterrupt(uint32_t pin, void (*callback)(void), uint32_t mode);
 
 void detachInterrupt(uint32_t pin);
