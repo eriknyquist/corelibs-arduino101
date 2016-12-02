@@ -11,7 +11,7 @@
 #define GPIO_START                     0
 #define GPIO_END                       (NUM_DIGITAL_PINS - 1)
 
-#define GPIO_MODE_MASK                 0x18
+#define GPIO_MODE_MASK                 0x38
 #define SRC_STAT(src)                  (wsrc_table[src].status)
 
 #define MAX_ATTACHABLE                 10
