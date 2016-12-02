@@ -39,7 +39,11 @@ static uint32_t noInterrupts_executed;
  * and 'mode' is unused. */
 void attachInterruptWakeup (uint32_t pin, void (*callback)(void), uint32_t mode)
 {
-    if (pin >= AON_GPIO_START && pin <= AON_GPIO_END) {
+    if (pin > NUM_WAKEUP) {
+        return;
+    }
+
+    if (pin <= GPIO_END) {
         wsrc_register_gpio(pin, callback, mode);
     } else {
         wsrc_register_id(pin, callback);
@@ -48,11 +52,11 @@ void attachInterruptWakeup (uint32_t pin, void (*callback)(void), uint32_t mode)
 
 void detachInterruptWakeup (uint32_t pin)
 {
-    if (pin >= AON_GPIO_START && pin <= AON_GPIO_END) {
-        wsrc_unregister_gpio(pin);
-    } else {
-        wsrc_unregister_id(pin);
+    if (pin > NUM_WAKEUP) {
+        return;
     }
+
+    wsrc_unregister(pin);
 }
 
 void attachInterrupt(uint32_t pin, void(*callback)(void), uint32_t mode)

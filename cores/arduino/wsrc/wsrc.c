@@ -7,18 +7,65 @@
  extern "C" {
 #endif
 
-#define idtoi(id) ((id < NUM_WAKEUP && id >= 0) ? id : 0)
-#define gpiotoi(pin) ((pin >= AON_GPIO_START && pin <= AON_GPIO_END) ? \
-                     (pin - AON_GPIO_START) + NUM_WAKEUP : NUM_WAKEUP)
-
 static uint8_t active_index;
 static uint8_t num_active;
-static uint8_t *wsrc_active;
-wsrc_entry_t *wsrc_table;
+static wsrc_active_t wsrc_active[MAX_ATTACHABLE];
 
-static void wsrc_set_active (uint8_t index)
+
+wsrc_entry_t wsrc_table[NUM_WAKEUP] = {
+    { .irq = IRQ_GPIO1_INTR, .status = 0 },     /* I00 */
+    { .irq = IRQ_GPIO1_INTR, .status = 0 },     /* I01 */
+    { .irq = IRQ_GPIO_INTR, .status = 0 },      /* I02 */
+    { .irq = IRQ_GPIO1_INTR, .status = 0 },     /* I03 */
+    { .irq = IRQ_GPIO_INTR, .status = 0 },      /* I04 */
+    { .irq = IRQ_GPIO1_INTR, .status = 0 },     /* I05 */
+    { .irq = IRQ_GPIO1_INTR, .status = 0 },     /* I06 */
+    { .irq = IRQ_GPIO_INTR, .status = 0 },      /* I07 */
+    { .irq = IRQ_GPIO_INTR, .status = 0 },      /* I08 */
+    { .irq = IRQ_GPIO1_INTR, .status = 0 },     /* I09 */
+    { .irq = IRQ_GPIO_INTR, .status = 0 },      /* I010 */
+    { .irq = IRQ_GPIO_INTR, .status = 0 },      /* I011 */
+    { .irq = IRQ_GPIO_INTR, .status = 0 },      /* I012 */
+    { .irq = IRQ_GPIO_INTR, .status = 0 },      /* I013 */
+    { .irq = IRQ_GPIO0_INTR, .status = 0 },     /* I014 */
+    { .irq = IRQ_GPIO0_INTR, .status = 0 },     /* I015 */
+    { .irq = IRQ_GPIO0_INTR, .status = 0 },     /* I016 */
+    { .irq = IRQ_GPIO0_INTR, .status = 0 },     /* I017 */
+    { .irq = IRQ_GPIO0_INTR, .status = 0 },     /* I018 */
+    { .irq = IRQ_GPIO0_INTR, .status = 0 },     /* I019 */
+    { .irq = IRQ_GPIO0_INTR, .status = 0 },     /* I020 */
+    { .irq = IRQ_GPIO_INTR, .status = 0 },      /* I021 */
+    { .irq = IRQ_GPIO_INTR, .status = 0 },      /* I022 */
+    { .irq = IRQ_GPIO_INTR, .status = 0 },      /* I023 */
+    { .irq = IRQ_GPIO_INTR, .status = 0 },      /* I024 */
+    { .irq = IRQ_GPIO_INTR, .status = 0 },      /* I025 */
+    { .irq = IRQ_ALWAYS_ON_GPIO, .status = 1 }, /* IO26 */
+    { .irq = IRQ_ALWAYS_ON_GPIO, .status = 1 }, /* IO27 */
+    { .irq = IRQ_ALWAYS_ON_GPIO, .status = 1 }, /* IO28 */
+    { .irq = IRQ_ALWAYS_ON_GPIO, .status = 1 }, /* BLE_WAKEUP */
+    { .irq = IRQ_I2S_INTR, .status = 0 },       /* I2S_WAKEUP */
+    { .irq = IRQ_ALWAYS_ON_GPIO, .status = 1 }, /* IMU_WAKEUP */
+    { .irq = IRQ_I2C0_RX_AVAIL, .status = 0 },  /* WIRE_RX_WAKEUP */
+    { .irq = IRQ_USB_INTR, .status = 0 },       /* SERIAL_WAKEUP */
+    { .irq = IRQ_UART1_INTR, .status = 0 },     /* SERIAL1_WAKEUP */
+    { .irq = IRQ_ADC_IRQ, .status = 0 },        /* ADC_WAKEUP */
+    { .irq = IRQ_ALWAYS_ON_TMR, .status = 0 },  /* AON_TIMER_WAKEUP */
+    { .irq = IRQ_TIMER1, .status = 0 },         /* TIMER1_WAKEUP */
+    { .irq = IRQ_PWM_TIMER_INTR, .status = 0 }, /* PWM_TIMER_WAKEUP */
+    { .irq = IRQ_SPI1_RX_AVAIL, .status = 0 },  /* SPI_RX_WAKEUP */
+    { .irq = IRQ_SPI0_RX_AVAIL, .status = 0 },  /* SPI1_RX_WAKEUP */
+    { .irq = IRQ_RTC_INTR, .status = 1 },       /* RTC_WAKEUP */
+    { .irq = IRQ_WDOG_INTR, .status = 0 },      /* WATCHDOG_WAKEUP */
+    { .irq = IRQ_MAILBOXES_INTR, .status = 0 }, /* MAILBOX_WAKEUP */
+    { .irq = IRQ_COMPARATORS_INTR, .status = 1},/* COMPARATORS_WAKEUP*/
+};
+
+static void wsrc_set_active (uint8_t index, void (*cb)(void))
 {
-    wsrc_active[num_active++] = index;
+    if (num_active < MAX_ATTACHABLE) {
+        wsrc_active[num_active].cb = (uint32_t)cb;
+        wsrc_active[num_active++].index = index;
+    }
 }
 
 static void wsrc_clear_active (uint8_t index)
@@ -28,7 +75,7 @@ static void wsrc_clear_active (uint8_t index)
     for (i = 0; i < num_active; ++i) {
 
         /* Look for this value in wsrc_active ... */
-        if (wsrc_active[i] == index) {
+        if (wsrc_active[i].index == index) {
 
             /* ... and shift over all remaining values that follow it */
             for (j = i + 1; j < num_active; ++j) {
@@ -41,100 +88,49 @@ static void wsrc_clear_active (uint8_t index)
     }
 }
 
-wsrc_entry_t *wsrc_get_next_active (int *id)
+int wsrc_get_next_active (wsrc_t *wsrc)
 {
-    uint8_t curr;
-    int wsrc_id;
+    uint8_t i;
 
-    if (active_index == num_active) {
+    if (active_index == num_active || !wsrc) {
         active_index = 0;
-        return NULL;
+        return 0;
     }
 
-    curr = wsrc_active[active_index++];
-    wsrc_id = curr;
+    i = wsrc_active[active_index].index;
 
-    if (curr >= NUM_WAKEUP) {
-        wsrc_id = (curr - NUM_WAKEUP) + AON_GPIO_START;
-    }
+    wsrc->irq = wsrc_table[i].irq;
+    wsrc->callback = wsrc_active[active_index].cb;
+    wsrc->status = wsrc_table[i].status;
+    wsrc->id = i;
 
-    if (id) *id = wsrc_id;
-    return &wsrc_table[curr];
-}
-
-void wsrc_table_init (void)
-{
-    void *pool;
-    unsigned int pool_size;
-    unsigned int table_size;
-
-    table_size = sizeof(wsrc_entry_t) * NUM_WAKEUP_SOURCES;
-    pool_size = table_size + NUM_WAKEUP_SOURCES;
-    pool = dccm_malloc(pool_size);
-    memset(pool, 0, pool_size);
-
-    wsrc_table = (wsrc_entry_t *)pool;
-    wsrc_active = ((uint8_t *)pool) + table_size;
-
-    num_active = 0;
-    active_index = 0;
-
-    /* GPIOs enabled by default (i.e. no GPIO.begin() method) */
-    for (int i = NUM_WAKEUP; i < NUM_WAKEUP_SOURCES; ++i) {
-        wsrc_set_enabled(SRC_STAT(i));
-    }
-
-    /* ADC enabled by default */
-    wsrc_set_enabled(SRC_STAT(ADC_WAKEUP));
+    ++active_index;
+    return 1;
 }
 
 void wsrc_register_gpio (uint32_t pin, void (*callback)(void), uint32_t mode)
 {
-    unsigned int index;
-    index = gpiotoi(pin);
-
     /* Set interrupt mode */
-    wsrc_set_gpio_mode(SRC_STAT(index), mode);
+    wsrc_set_gpio_mode(SRC_STAT(pin), mode);
 
-    /* Save callback function */
-    wsrc_table[index].cb = (uint32_t)callback;
-
-    if (!wsrc_wakeup(SRC_STAT(index))) {
-        wsrc_set_active(index);
-        wsrc_set_wakeup(SRC_STAT(index));
+    if (!wsrc_wakeup(SRC_STAT(pin))) {
+        wsrc_set_active(pin, callback);
+        wsrc_set_wakeup(SRC_STAT(pin));
     }
-}
-
-void wsrc_unregister_gpio (uint32_t pin)
-{
-    unsigned int index;
-
-    index = gpiotoi(pin);
-    wsrc_clear_active(index);
-    wsrc_clear_wakeup(SRC_STAT(index));
 }
 
 void wsrc_register_id (int id, void (*callback)(void))
 {
-    unsigned int index;
-    index = idtoi(id);
-
-    /* Save callback function */
-    wsrc_table[index].cb = (uint32_t)callback;
-
-    if (!wsrc_wakeup(SRC_STAT(index))) {
-        wsrc_set_active(index);
-        wsrc_set_wakeup(SRC_STAT(index));
+    if (!wsrc_wakeup(SRC_STAT(id))) {
+        wsrc_set_active(id, callback);
+        wsrc_set_wakeup(SRC_STAT(id));
     }
 }
 
-void wsrc_unregister_id (int id)
+void wsrc_unregister (int id)
 {
-    unsigned int index;
-
-    index = idtoi(id);
-    wsrc_clear_active(index);
-    wsrc_clear_wakeup(SRC_STAT(index));
+    wsrc_clear_active(id);
+    wsrc_clear_wakeup(SRC_STAT(id));
 }
 
 #ifdef __cplusplus
