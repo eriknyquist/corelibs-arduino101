@@ -7,10 +7,10 @@
  extern "C" {
 #endif
 
-static uint8_t active_index;
+static uint8_t new_index;
+static uint8_t old_index;
 static uint8_t num_active;
 static wsrc_active_t wsrc_active[MAX_ATTACHABLE];
-
 
 wsrc_entry_t wsrc_table[NUM_WAKEUP] = {
     { .irq = IRQ_GPIO1_INTR, .status = 0 },     /* I00 */
@@ -65,6 +65,7 @@ static void wsrc_set_active (uint8_t index, void (*cb)(void))
     if (num_active < MAX_ATTACHABLE) {
         wsrc_active[num_active].cb = (uint32_t)cb;
         wsrc_active[num_active++].index = index;
+        ++new_index;
     }
 }
 
@@ -83,28 +84,47 @@ static void wsrc_clear_active (uint8_t index)
             }
 
             --num_active;
+            --new_index;
             break;
         }
     }
 }
 
-int wsrc_get_next_active (wsrc_t *wsrc)
+int wsrc_get_newest_attached (wsrc_t *wsrc)
 {
     uint8_t i;
 
-    if (active_index == num_active || !wsrc) {
-        active_index = 0;
+    if (new_index == 0 || !wsrc) {
+        new_index = num_active;
         return 0;
     }
 
-    i = wsrc_active[active_index].index;
+    i = wsrc_active[--new_index].index;
 
     wsrc->irq = wsrc_table[i].irq;
-    wsrc->callback = wsrc_active[active_index].cb;
+    wsrc->callback = wsrc_active[new_index].cb;
     wsrc->status = wsrc_table[i].status;
     wsrc->id = i;
 
-    ++active_index;
+    return 1;
+}
+
+int wsrc_get_oldest_attached (wsrc_t *wsrc)
+{
+    uint8_t i;
+
+    if (old_index == num_active || !wsrc) {
+        old_index = 0;
+        return 0;
+    }
+
+    i = wsrc_active[old_index].index;
+
+    wsrc->irq = wsrc_table[i].irq;
+    wsrc->callback = wsrc_active[old_index++].cb;
+    wsrc->status = wsrc_table[i].status;
+    wsrc->id = i;
+
     return 1;
 }
 
